@@ -16,7 +16,7 @@ import lombok.Setter;
 @AllArgsConstructor
 public class EvaluationCreateDto {
 
-    @NotBlank(message = "ne doit pas être vide")
+    // Obligatoire seulement sans JWT. Avec le profil oidc, le nom vient du token.
     @Size(max = 50, message = "doit contenir au plus 50 caractères")
     private String nomEvaluateur;
 

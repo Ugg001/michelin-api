@@ -9,5 +9,7 @@ spring:
       ddl-auto: create-drop
 
 app:
+  security:
+    jwt-enabled: false
   lucene:
     index-path: ${java.io.tmpdir}/michelin-lucene-test-${random.uuid}

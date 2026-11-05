@@ -20,5 +20,7 @@ spring:
       enabled: true
 
 app:
+  security:
+    jwt-enabled: false
   lucene:
     index-path: ./index

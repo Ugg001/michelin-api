@@ -28,6 +28,10 @@ public class EvaluationEntity {
     @Column(nullable = false)
     private int note;
 
+    // sub du JWT, ou "local:nom" quand on teste sans Keycloak.
+    @Column
+    private String userSubject;
+
     @ManyToOne(optional = false)
     @JoinColumn(name = "restaurant_id", nullable = false)
     private RestaurantEntity restaurant;

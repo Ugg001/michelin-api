@@ -1,0 +1,11 @@
+app:
+  security:
+    jwt-enabled: true
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://keycloak.bober.ovh/realms/master
+          jwk-set-uri: https://keycloak.bober.ovh/realms/master/protocol/openid-connect/certs

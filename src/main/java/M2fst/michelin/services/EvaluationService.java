@@ -8,7 +8,12 @@ import M2fst.michelin.exceptions.NotFoundException;
 import M2fst.michelin.repository.EvaluationRepository;
 import M2fst.michelin.repository.RestaurantRepository;
 import M2fst.michelin.search.EvaluationIndexRepository;
+import M2fst.michelin.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,8 +28,13 @@ public class EvaluationService {
     private final RestaurantRepository restaurantRepository;
     private final EvaluationIndexRepository evaluationIndexRepository;
 
+    @Value("${app.security.jwt-enabled:false}")
+    private boolean jwtEnabled;
+
     @Transactional
-    public EvaluationDto add(int restaurantId, String nomEvaluateur, String commentaire, Integer note) {
+    public EvaluationDto add(int restaurantId, String nomEvaluateur, String commentaire, Integer note,
+                             Authentication authentication) {
+        nomEvaluateur = this.resolveNom(authentication, nomEvaluateur);
         this.check(nomEvaluateur, commentaire, note);
         RestaurantEntity restaurant = this.restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new NotFoundException("Restaurant not found"));
@@ -32,6 +42,7 @@ public class EvaluationService {
         entity.setNomEvaluateur(nomEvaluateur);
         entity.setCommentaire(commentaire);
         entity.setNote(note);
+        entity.setUserSubject(this.resolveSubject(authentication, nomEvaluateur));
         entity.setRestaurant(restaurant);
         EvaluationEntity saved = this.evaluationRepository.save(entity);
         this.evaluationIndexRepository.index(saved.getId(), saved.getCommentaire());
@@ -60,6 +71,18 @@ public class EvaluationService {
         List<EvaluationDto> result = new ArrayList<>();
         for (Integer id : ids) {
             this.evaluationRepository.findById(id).ifPresent(entity -> result.add(toDto(entity)));
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public List<EvaluationDto> findMine(String userSubject) {
+        if (userSubject == null || userSubject.isBlank()) {
+            throw new AccessDeniedException("Il faut être connecté");
+        }
+        List<EvaluationDto> result = new ArrayList<>();
+        for (EvaluationEntity entity : this.evaluationRepository.findByUserSubject(userSubject)) {
+            result.add(toDto(entity));
         }
         return result;
     }
@@ -96,6 +119,27 @@ public class EvaluationService {
             throw new NotFoundException("Evaluation not found");
         }
         return entity;
+    }
+
+    private String resolveNom(Authentication authentication, String nomEvaluateur) {
+        if (this.jwtEnabled) {
+            if (!(authentication instanceof JwtAuthenticationToken)) {
+                throw new AccessDeniedException("Il faut être connecté");
+            }
+            String nom = AuthenticatedUser.displayName(authentication);
+            if (nom == null || nom.isBlank()) {
+                throw new AccessDeniedException("Le token ne contient pas le nom");
+            }
+            return nom;
+        }
+        return nomEvaluateur;
+    }
+
+    private String resolveSubject(Authentication authentication, String nomEvaluateur) {
+        if (authentication instanceof JwtAuthenticationToken) {
+            return AuthenticatedUser.subject(authentication);
+        }
+        return "local:" + nomEvaluateur;
     }
 
     private void check(String nomEvaluateur, String commentaire, Integer note) {

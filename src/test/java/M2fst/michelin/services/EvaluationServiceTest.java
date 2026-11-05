@@ -10,10 +10,16 @@ import M2fst.michelin.repository.RestaurantRepository;
 import M2fst.michelin.search.EvaluationIndexRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -53,20 +59,22 @@ class EvaluationServiceTest {
             return entity;
         });
 
-        EvaluationDto result = this.evaluationService.add(1, "Lucien", "Excellent saumon", 3);
+        EvaluationDto result = this.evaluationService.add(1, "Lucien", "Excellent saumon", 3, null);
 
         assertEquals(4, result.getId());
         assertEquals("Lucien", result.getNomEvaluateur());
         assertEquals("Excellent saumon", result.getCommentaire());
         assertEquals(3, result.getNote());
         verify(this.restaurantRepository, times(1)).findById(1);
-        verify(this.evaluationRepository, times(1)).save(any(EvaluationEntity.class));
+        ArgumentCaptor<EvaluationEntity> captor = ArgumentCaptor.forClass(EvaluationEntity.class);
+        verify(this.evaluationRepository, times(1)).save(captor.capture());
+        assertEquals("local:Lucien", captor.getValue().getUserSubject());
     }
 
     @Test
     void should_reject_a_blank_comment_without_calling_the_database() {
         assertThrows(InvalidEvaluationException.class,
-                () -> this.evaluationService.add(1, "Lucien", "   ", 2));
+                () -> this.evaluationService.add(1, "Lucien", "   ", 2, null));
         verifyNoInteractions(this.evaluationRepository);
         verifyNoInteractions(this.restaurantRepository);
     }
@@ -74,7 +82,7 @@ class EvaluationServiceTest {
     @Test
     void should_reject_a_name_longer_than_50_characters_without_calling_the_database() {
         assertThrows(InvalidEvaluationException.class,
-                () -> this.evaluationService.add(1, "a".repeat(51), "Bon", 1));
+                () -> this.evaluationService.add(1, "a".repeat(51), "Bon", 1, null));
         verifyNoInteractions(this.evaluationRepository);
         verifyNoInteractions(this.restaurantRepository);
     }
@@ -82,7 +90,7 @@ class EvaluationServiceTest {
     @Test
     void should_reject_a_note_above_3_without_calling_the_database() {
         assertThrows(InvalidEvaluationException.class,
-                () -> this.evaluationService.add(1, "Lucien", "Trop", 4));
+                () -> this.evaluationService.add(1, "Lucien", "Trop", 4, null));
         verifyNoInteractions(this.evaluationRepository);
         verifyNoInteractions(this.restaurantRepository);
     }
@@ -100,7 +108,7 @@ class EvaluationServiceTest {
         when(this.restaurantRepository.findById(1)).thenReturn(Optional.empty());
 
         assertThrows(NotFoundException.class,
-                () -> this.evaluationService.add(1, "Lucien", "Bon", 2));
+                () -> this.evaluationService.add(1, "Lucien", "Bon", 2, null));
 
         verify(this.restaurantRepository, times(1)).findById(1);
         verify(this.evaluationRepository, never()).save(any());
@@ -170,6 +178,63 @@ class EvaluationServiceTest {
 
         assertTrue(result.isEmpty());
         verifyNoInteractions(this.evaluationIndexRepository);
+    }
+
+    @Test
+    void should_take_the_name_from_the_jwt() {
+        ReflectionTestUtils.setField(this.evaluationService, "jwtEnabled", true);
+        RestaurantEntity restaurant = new RestaurantEntity();
+        restaurant.setId(1);
+        when(this.restaurantRepository.findById(1)).thenReturn(Optional.of(restaurant));
+        when(this.evaluationRepository.save(any(EvaluationEntity.class))).thenAnswer(invocation -> {
+            EvaluationEntity entity = invocation.getArgument(0);
+            entity.setId(8);
+            return entity;
+        });
+        Jwt jwt = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .subject("user-lucien")
+                .claim("preferred_username", "lucien.bramard@michelin.fr")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build();
+
+        EvaluationDto result = this.evaluationService.add(1, null, "Bon", 2, new JwtAuthenticationToken(jwt));
+
+        assertEquals("lucien.bramard@michelin.fr", result.getNomEvaluateur());
+        ArgumentCaptor<EvaluationEntity> captor = ArgumentCaptor.forClass(EvaluationEntity.class);
+        verify(this.evaluationRepository).save(captor.capture());
+        assertEquals("user-lucien", captor.getValue().getUserSubject());
+    }
+
+    @Test
+    void should_refuse_a_jwt_mode_call_without_a_token() {
+        ReflectionTestUtils.setField(this.evaluationService, "jwtEnabled", true);
+
+        assertThrows(AccessDeniedException.class,
+                () -> this.evaluationService.add(1, "Lucien", "Bon", 2, null));
+        verifyNoInteractions(this.evaluationRepository);
+        verifyNoInteractions(this.restaurantRepository);
+    }
+
+    @Test
+    void should_list_my_evaluations() {
+        EvaluationEntity evaluation = this.evaluationOnRestaurant(1);
+        evaluation.setUserSubject("local:Lucien");
+        when(this.evaluationRepository.findByUserSubject("local:Lucien")).thenReturn(List.of(evaluation));
+
+        List<EvaluationDto> result = this.evaluationService.findMine("local:Lucien");
+
+        assertEquals(1, result.size());
+        assertEquals("Lucien", result.get(0).getNomEvaluateur());
+    }
+
+    @Test
+    void should_reject_a_blank_name_without_calling_the_database() {
+        assertThrows(InvalidEvaluationException.class,
+                () -> this.evaluationService.add(1, "  ", "Bon", 2, null));
+        verifyNoInteractions(this.evaluationRepository);
+        verifyNoInteractions(this.restaurantRepository);
     }
 
     @Test

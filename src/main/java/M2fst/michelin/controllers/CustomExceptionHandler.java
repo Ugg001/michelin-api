@@ -5,6 +5,7 @@ import M2fst.michelin.exceptions.InvalidEvaluationException;
 import M2fst.michelin.exceptions.InvalidRestaurantException;
 import M2fst.michelin.exceptions.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -20,6 +21,13 @@ import java.util.stream.Collectors;
 @Slf4j
 @ControllerAdvice
 public class CustomExceptionHandler extends ResponseEntityExceptionHandler {
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+        log.warn("Access denied: {}", ex.getMessage());
+        String message = ex.getMessage() != null ? ex.getMessage() : "Forbidden";
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(403, message));
+    }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
