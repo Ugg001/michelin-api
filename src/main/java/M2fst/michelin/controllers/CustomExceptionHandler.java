@@ -1,6 +1,7 @@
 package M2fst.michelin.controllers;
 
 import M2fst.michelin.dto.ErrorResponse;
+import M2fst.michelin.exceptions.InvalidRestaurantException;
 import M2fst.michelin.exceptions.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -18,6 +19,12 @@ import java.util.stream.Collectors;
 @Slf4j
 @ControllerAdvice
 public class CustomExceptionHandler extends ResponseEntityExceptionHandler {
+
+    @ExceptionHandler(InvalidRestaurantException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRestaurant(InvalidRestaurantException ex) {
+        log.warn("Invalid restaurant: {}", ex.getMessage());
+        return ResponseEntity.badRequest().body(new ErrorResponse(400, ex.getMessage()));
+    }
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(NotFoundException ex) {

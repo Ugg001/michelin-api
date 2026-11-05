@@ -12,4 +12,5 @@ target/
 ### Base H2 et index (on ne versionne pas les données locales) ###
 *.mv.db
 *.trace.db
+*.lock.db
 index/
