@@ -7,9 +7,13 @@ import M2fst.michelin.exceptions.InvalidEvaluationException;
 import M2fst.michelin.exceptions.NotFoundException;
 import M2fst.michelin.repository.EvaluationRepository;
 import M2fst.michelin.repository.RestaurantRepository;
+import M2fst.michelin.search.EvaluationIndexRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @RequiredArgsConstructor
 @Service
@@ -17,6 +21,7 @@ public class EvaluationService {
 
     private final EvaluationRepository evaluationRepository;
     private final RestaurantRepository restaurantRepository;
+    private final EvaluationIndexRepository evaluationIndexRepository;
 
     @Transactional
     public EvaluationDto add(int restaurantId, String nomEvaluateur, String commentaire, Integer note) {
@@ -28,7 +33,9 @@ public class EvaluationService {
         entity.setCommentaire(commentaire);
         entity.setNote(note);
         entity.setRestaurant(restaurant);
-        return toDto(this.evaluationRepository.save(entity));
+        EvaluationEntity saved = this.evaluationRepository.save(entity);
+        this.evaluationIndexRepository.index(saved.getId(), saved.getCommentaire());
+        return toDto(saved);
     }
 
     @Transactional
@@ -38,13 +45,48 @@ public class EvaluationService {
         EvaluationEntity entity = this.findEvaluation(restaurantId, evaluationId);
         entity.setCommentaire(commentaire);
         entity.setNote(note);
-        return toDto(this.evaluationRepository.save(entity));
+        EvaluationEntity saved = this.evaluationRepository.save(entity);
+        this.evaluationIndexRepository.index(saved.getId(), saved.getCommentaire());
+        return toDto(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<EvaluationDto> search(List<String> mots) {
+        String text = this.joinWords(mots);
+        if (text.isEmpty()) {
+            return List.of();
+        }
+        List<Integer> ids = this.evaluationIndexRepository.searchIds(text);
+        List<EvaluationDto> result = new ArrayList<>();
+        for (Integer id : ids) {
+            this.evaluationRepository.findById(id).ifPresent(entity -> result.add(toDto(entity)));
+        }
+        return result;
     }
 
     @Transactional
     public void delete(int restaurantId, int evaluationId) {
         EvaluationEntity entity = this.findEvaluation(restaurantId, evaluationId);
         this.evaluationRepository.delete(entity);
+        this.evaluationIndexRepository.delete(entity.getId());
+    }
+
+    // Plusieurs q= sont collés. Lucene garde un commentaire qui contient au moins un mot.
+    private String joinWords(List<String> mots) {
+        if (mots == null || mots.isEmpty()) {
+            return "";
+        }
+        StringBuilder text = new StringBuilder();
+        for (String mot : mots) {
+            if (mot == null || mot.isBlank()) {
+                continue;
+            }
+            if (text.length() > 0) {
+                text.append(' ');
+            }
+            text.append(mot.trim());
+        }
+        return text.toString();
     }
 
     private EvaluationEntity findEvaluation(int restaurantId, int evaluationId) {

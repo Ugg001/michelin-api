@@ -7,3 +7,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+
+app:
+  lucene:
+    index-path: ${java.io.tmpdir}/michelin-lucene-test-${random.uuid}

@@ -7,16 +7,19 @@ import M2fst.michelin.exceptions.InvalidEvaluationException;
 import M2fst.michelin.exceptions.NotFoundException;
 import M2fst.michelin.repository.EvaluationRepository;
 import M2fst.michelin.repository.RestaurantRepository;
+import M2fst.michelin.search.EvaluationIndexRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -35,6 +38,9 @@ class EvaluationServiceTest {
 
     @Mock
     private RestaurantRepository restaurantRepository;
+
+    @Mock
+    private EvaluationIndexRepository evaluationIndexRepository;
 
     @Test
     void should_add_an_evaluation() {
@@ -145,6 +151,25 @@ class EvaluationServiceTest {
         assertThrows(NotFoundException.class, () -> this.evaluationService.delete(1, 4));
 
         verify(this.evaluationRepository, never()).delete(any());
+    }
+
+    @Test
+    void should_search_evaluations_for_the_given_words() {
+        when(this.evaluationIndexRepository.searchIds("saumon citron")).thenReturn(List.of(4));
+        when(this.evaluationRepository.findById(4)).thenReturn(Optional.of(this.evaluationOnRestaurant(1)));
+
+        List<EvaluationDto> result = this.evaluationService.search(List.of("saumon", "citron"));
+
+        assertEquals(1, result.size());
+        assertEquals("Excellent saumon", result.get(0).getCommentaire());
+    }
+
+    @Test
+    void should_not_call_lucene_when_the_words_are_blank() {
+        List<EvaluationDto> result = this.evaluationService.search(List.of("  "));
+
+        assertTrue(result.isEmpty());
+        verifyNoInteractions(this.evaluationIndexRepository);
     }
 
     @Test

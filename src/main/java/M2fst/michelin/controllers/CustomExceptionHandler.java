@@ -21,6 +21,12 @@ import java.util.stream.Collectors;
 @ControllerAdvice
 public class CustomExceptionHandler extends ResponseEntityExceptionHandler {
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("Bad request: {}", ex.getMessage());
+        return ResponseEntity.badRequest().body(new ErrorResponse(400, ex.getMessage()));
+    }
+
     @ExceptionHandler(InvalidEvaluationException.class)
     public ResponseEntity<ErrorResponse> handleInvalidEvaluation(InvalidEvaluationException ex) {
         log.warn("Invalid evaluation: {}", ex.getMessage());

@@ -42,7 +42,13 @@ curl.exe -H "Content-Type: application/json" -d "{\"nomEvaluateur\":\"Lucien\",\
 curl.exe -X PUT -H "Content-Type: application/json" -d "{\"commentaire\":\"Un peu juste\",\"note\":1}" http://localhost:8082/restaurant/1/evaluation/1
 
 curl.exe -X DELETE http://localhost:8082/restaurant/1/evaluation/1
+
+curl.exe "http://localhost:8082/evaluation/search?q=saumon"
+
+curl.exe "http://localhost:8082/evaluation/search?q=saumon&q=citron"
 ```
+
+La recherche reprend Lucene du TP. `q` peut être répété, comme `isbn` pour les livres. Plusieurs mots : on garde une évaluation si elle contient au moins un des mots.
 
 ## Tests
 

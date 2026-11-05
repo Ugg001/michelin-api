@@ -18,3 +18,7 @@ spring:
   h2:
     console:
       enabled: true
+
+app:
+  lucene:
+    index-path: ./index
