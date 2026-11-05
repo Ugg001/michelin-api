@@ -65,6 +65,24 @@ curl.exe http://localhost:8082/evaluation/mine
 
 La recherche reprend Lucene du TP. `q` peut être répété, comme `isbn` pour les livres. Plusieurs mots : on garde une évaluation si elle contient au moins un des mots.
 
+## Images
+
+Comme la couverture d'un livre : l'API ne reçoit pas le fichier. Elle renvoie une url signée, valable 15 minutes, et c'est le client qui envoie l'image sur S3. Une image par restaurant (un nouvel envoi remplace la précédente). Une évaluation peut avoir plusieurs photos.
+
+Les buckets `restaurant` et `evaluation` sont ceux du cours. Les clés sont dans `application.yaml`.
+
+```powershell
+curl.exe -X POST http://localhost:8082/restaurant/1/image
+
+curl.exe http://localhost:8082/restaurant/1/image
+
+curl.exe -X POST http://localhost:8082/restaurant/1/evaluation/1/photo
+
+curl.exe http://localhost:8082/restaurant/1/evaluation/1/photo
+```
+
+Avec le profil `oidc`, déposer l'image d'un restaurant demande le rôle ADMIN. Déposer une photo d'évaluation demande USER ou ADMIN, et seulement sur ses propres évaluations (un ADMIN peut le faire sur toutes). Lire le lien reste ouvert.
+
 ## Tests
 
 ```powershell

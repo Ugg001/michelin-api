@@ -1,13 +1,16 @@
 package M2fst.michelin.services;
 
 import M2fst.michelin.dto.EvaluationDto;
+import M2fst.michelin.dto.ImageLink;
 import M2fst.michelin.entity.EvaluationEntity;
+import M2fst.michelin.entity.EvaluationPhotoEntity;
 import M2fst.michelin.entity.RestaurantEntity;
 import M2fst.michelin.exceptions.InvalidEvaluationException;
 import M2fst.michelin.exceptions.NotFoundException;
 import M2fst.michelin.repository.EvaluationRepository;
 import M2fst.michelin.repository.RestaurantRepository;
 import M2fst.michelin.search.EvaluationIndexRepository;
+import M2fst.michelin.storage.S3Storage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.security.access.AccessDeniedException;
@@ -48,6 +51,9 @@ class EvaluationServiceTest {
 
     @Mock
     private EvaluationIndexRepository evaluationIndexRepository;
+
+    @Mock
+    private S3Storage evaluationStorage;
 
     @Test
     void should_add_an_evaluation() {
@@ -283,6 +289,64 @@ class EvaluationServiceTest {
         assertEquals("Le mien", result.getCommentaire());
     }
 
+    @Test
+    void should_add_a_photo_key_and_return_an_upload_link() {
+        EvaluationEntity evaluation = this.existingEvaluation();
+        when(this.evaluationStorage.createUploadUrl(any())).thenReturn("http://s3/upload");
+
+        ImageLink link = this.evaluationService.requestPhotoUpload(1, 4, null);
+
+        assertEquals("http://s3/upload", link.getUrl());
+        assertEquals(1, evaluation.getPhotos().size());
+        assertEquals(link.getId(), evaluation.getPhotos().get(0).getId());
+        verify(this.evaluationRepository, times(1)).save(evaluation);
+    }
+
+    @Test
+    void should_keep_the_previous_photo_when_adding_another() {
+        EvaluationEntity evaluation = this.existingEvaluation();
+        evaluation.getPhotos().add(this.photo("deja-la"));
+        when(this.evaluationStorage.createUploadUrl(any())).thenReturn("http://s3/upload");
+
+        this.evaluationService.requestPhotoUpload(1, 4, null);
+
+        assertEquals(2, evaluation.getPhotos().size());
+        assertEquals("deja-la", evaluation.getPhotos().get(0).getId());
+    }
+
+    @Test
+    void should_refuse_a_photo_on_someone_elses_evaluation() {
+        ReflectionTestUtils.setField(this.evaluationService, "jwtEnabled", true);
+        EvaluationEntity evaluation = this.existingEvaluation();
+        evaluation.setUserSubject("user-lucien");
+
+        assertThrows(AccessDeniedException.class,
+                () -> this.evaluationService.requestPhotoUpload(1, 4, this.token("user-noel", "ROLE_USER")));
+        verify(this.evaluationStorage, never()).createUploadUrl(any());
+        verify(this.evaluationRepository, never()).save(any());
+    }
+
+    @Test
+    void should_return_one_download_link_per_photo() {
+        EvaluationEntity evaluation = this.existingEvaluation();
+        evaluation.getPhotos().add(this.photo("photo-1"));
+        when(this.evaluationStorage.createDownloadUrl("photo-1")).thenReturn("http://s3/photo-1");
+
+        List<ImageLink> links = this.evaluationService.requestPhotoDownload(1, 4);
+
+        assertEquals(1, links.size());
+        assertEquals("photo-1", links.get(0).getId());
+        assertEquals("http://s3/photo-1", links.get(0).getUrl());
+    }
+
+    @Test
+    void should_reject_a_download_when_there_is_no_photo() {
+        this.existingEvaluation();
+
+        assertThrows(NotFoundException.class, () -> this.evaluationService.requestPhotoDownload(1, 4));
+        verifyNoInteractions(this.evaluationStorage);
+    }
+
     private JwtAuthenticationToken token(String subject, String role) {
         Jwt jwt = Jwt.withTokenValue("token")
                 .header("alg", "none")
@@ -301,6 +365,12 @@ class EvaluationServiceTest {
 
     private void stubSave() {
         when(this.evaluationRepository.save(any(EvaluationEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    private EvaluationPhotoEntity photo(String id) {
+        EvaluationPhotoEntity photo = new EvaluationPhotoEntity();
+        photo.setId(id);
+        return photo;
     }
 
     private EvaluationEntity evaluationOnRestaurant(int restaurantId) {

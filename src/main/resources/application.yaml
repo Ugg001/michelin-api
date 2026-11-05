@@ -24,3 +24,9 @@ app:
     jwt-enabled: false
   lucene:
     index-path: ./index
+  s3:
+    endpoint: https://s3.bober.ovh
+    access-key: cqBlF80IVJrc1isWW6oK
+    secret-key: KPJlY826Qi0d952w4GWmQIvA0zfvWi62hvIyiZlT
+    restaurant-bucket: restaurant
+    evaluation-bucket: evaluation

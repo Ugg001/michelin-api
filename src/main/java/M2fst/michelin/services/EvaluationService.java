@@ -1,7 +1,9 @@
 package M2fst.michelin.services;
 
 import M2fst.michelin.dto.EvaluationDto;
+import M2fst.michelin.dto.ImageLink;
 import M2fst.michelin.entity.EvaluationEntity;
+import M2fst.michelin.entity.EvaluationPhotoEntity;
 import M2fst.michelin.entity.RestaurantEntity;
 import M2fst.michelin.exceptions.InvalidEvaluationException;
 import M2fst.michelin.exceptions.NotFoundException;
@@ -9,7 +11,8 @@ import M2fst.michelin.repository.EvaluationRepository;
 import M2fst.michelin.repository.RestaurantRepository;
 import M2fst.michelin.search.EvaluationIndexRepository;
 import M2fst.michelin.security.AuthenticatedUser;
-import lombok.RequiredArgsConstructor;
+import M2fst.michelin.storage.S3Storage;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
@@ -20,14 +23,25 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
-@RequiredArgsConstructor
 @Service
 public class EvaluationService {
 
     private final EvaluationRepository evaluationRepository;
     private final RestaurantRepository restaurantRepository;
     private final EvaluationIndexRepository evaluationIndexRepository;
+    private final S3Storage evaluationStorage;
+
+    public EvaluationService(EvaluationRepository evaluationRepository,
+                             RestaurantRepository restaurantRepository,
+                             EvaluationIndexRepository evaluationIndexRepository,
+                             @Qualifier("evaluationBucket") S3Storage evaluationStorage) {
+        this.evaluationRepository = evaluationRepository;
+        this.restaurantRepository = restaurantRepository;
+        this.evaluationIndexRepository = evaluationIndexRepository;
+        this.evaluationStorage = evaluationStorage;
+    }
 
     @Value("${app.security.jwt-enabled:false}")
     private boolean jwtEnabled;
@@ -88,6 +102,36 @@ public class EvaluationService {
             result.add(toDto(entity));
         }
         return result;
+    }
+
+    // Plusieurs photos : chaque appel ajoute une clé, il ne remplace pas les précédentes.
+    @Transactional
+    public ImageLink requestPhotoUpload(int restaurantId, int evaluationId, Authentication authentication) {
+        EvaluationEntity entity = this.findEvaluation(restaurantId, evaluationId);
+        this.checkCanEdit(entity, authentication);
+        String id = UUID.randomUUID().toString();
+        EvaluationPhotoEntity photo = new EvaluationPhotoEntity();
+        photo.setId(id);
+        photo.setEvaluation(entity);
+        if (entity.getPhotos() == null) {
+            entity.setPhotos(new ArrayList<>());
+        }
+        entity.getPhotos().add(photo);
+        this.evaluationRepository.save(entity);
+        return new ImageLink(id, this.evaluationStorage.createUploadUrl(id));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ImageLink> requestPhotoDownload(int restaurantId, int evaluationId) {
+        EvaluationEntity entity = this.findEvaluation(restaurantId, evaluationId);
+        if (entity.getPhotos() == null || entity.getPhotos().isEmpty()) {
+            throw new NotFoundException("Photo not found");
+        }
+        List<ImageLink> links = new ArrayList<>();
+        for (EvaluationPhotoEntity photo : entity.getPhotos()) {
+            links.add(new ImageLink(photo.getId(), this.evaluationStorage.createDownloadUrl(photo.getId())));
+        }
+        return links;
     }
 
     @Transactional
@@ -205,6 +249,18 @@ public class EvaluationService {
                 .nomEvaluateur(entity.getNomEvaluateur())
                 .commentaire(entity.getCommentaire())
                 .note(entity.getNote())
+                .photoIds(photoIds(entity))
                 .build();
+    }
+
+    private static List<String> photoIds(EvaluationEntity entity) {
+        List<String> ids = new ArrayList<>();
+        if (entity.getPhotos() == null) {
+            return ids;
+        }
+        for (EvaluationPhotoEntity photo : entity.getPhotos()) {
+            ids.add(photo.getId());
+        }
+        return ids;
     }
 }

@@ -3,6 +3,7 @@ package M2fst.michelin.services;
 import M2fst.michelin.dto.EvaluationDto;
 import M2fst.michelin.dto.RestaurantDto;
 import M2fst.michelin.entity.EvaluationEntity;
+import M2fst.michelin.entity.EvaluationPhotoEntity;
 import M2fst.michelin.entity.RestaurantEntity;
 import M2fst.michelin.exceptions.InvalidRestaurantException;
 import M2fst.michelin.exceptions.NotFoundException;
@@ -75,6 +76,7 @@ public class RestaurantService {
                 .id(entity.getId())
                 .nom(entity.getNom())
                 .adresse(entity.getAdresse())
+                .imageId(entity.getImageId())
                 .moyenne(moyenne(evaluations))
                 .evaluations(toEvaluationDtos(evaluations))
                 .build();
@@ -103,8 +105,20 @@ public class RestaurantService {
                     .nomEvaluateur(evaluation.getNomEvaluateur())
                     .commentaire(evaluation.getCommentaire())
                     .note(evaluation.getNote())
+                    .photoIds(photoIds(evaluation))
                     .build());
         }
         return result;
+    }
+
+    private static List<String> photoIds(EvaluationEntity evaluation) {
+        List<String> ids = new ArrayList<>();
+        if (evaluation.getPhotos() == null) {
+            return ids;
+        }
+        for (EvaluationPhotoEntity photo : evaluation.getPhotos()) {
+            ids.add(photo.getId());
+        }
+        return ids;
     }
 }

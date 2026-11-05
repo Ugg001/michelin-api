@@ -76,6 +76,12 @@
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
 		</dependency>
+		<!-- Client S3, comme la couverture du livre dans le TP. -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<version>2.55.11</version>
+		</dependency>
 		<!-- Même lib que le cours. Le starter "ui" ajoute la page Swagger. -->
 		<dependency>
 			<groupId>org.springdoc</groupId>

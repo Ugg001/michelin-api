@@ -28,6 +28,10 @@ public class RestaurantEntity {
     @Column(nullable = false, length = 255)
     private String adresse;
 
+    // Clé de l'objet dans le bucket restaurant. L'image elle-même n'est pas en base.
+    @Column
+    private String imageId;
+
     // Comme le livre et ses commentaires dans le sujet de demo : un restaurant, plusieurs évaluations.
     @OneToMany(mappedBy = "restaurant", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<EvaluationEntity> evaluations = new ArrayList<>();
