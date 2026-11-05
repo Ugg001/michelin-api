@@ -1,0 +1,15 @@
+target/
+.mvn/wrapper/maven-wrapper.jar
+
+### IDE ###
+.idea
+*.iml
+.vscode/
+.classpath
+.project
+.settings
+
+### Base H2 et index (on ne versionne pas les données locales) ###
+*.mv.db
+*.trace.db
+index/
