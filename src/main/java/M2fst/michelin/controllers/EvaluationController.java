@@ -47,7 +47,7 @@ public class EvaluationController {
         return this.evaluationService.findMine(subject);
     }
 
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @PostMapping("/restaurant/{id}/evaluation")
     public ResponseEntity<EvaluationDto> add(@PathVariable(name = "id") int id,
                                              @Valid @RequestBody EvaluationCreateDto request,
@@ -56,18 +56,22 @@ public class EvaluationController {
                 id, request.getNomEvaluateur(), request.getCommentaire(), request.getNote(), principal));
     }
 
+    @PreAuthorize("isAuthenticated()")
     @PutMapping("/restaurant/{id}/evaluation/{evaluationId}")
     public ResponseEntity<EvaluationDto> update(@PathVariable(name = "id") int id,
                                                 @PathVariable(name = "evaluationId") int evaluationId,
-                                                @Valid @RequestBody EvaluationUpdateDto request) {
+                                                @Valid @RequestBody EvaluationUpdateDto request,
+                                                Authentication principal) {
         return ResponseEntity.ok(this.evaluationService.update(
-                id, evaluationId, request.getCommentaire(), request.getNote()));
+                id, evaluationId, request.getCommentaire(), request.getNote(), principal));
     }
 
+    @PreAuthorize("isAuthenticated()")
     @DeleteMapping("/restaurant/{id}/evaluation/{evaluationId}")
     public ResponseEntity<Void> delete(@PathVariable(name = "id") int id,
-                                       @PathVariable(name = "evaluationId") int evaluationId) {
-        this.evaluationService.delete(id, evaluationId);
+                                       @PathVariable(name = "evaluationId") int evaluationId,
+                                       Authentication principal) {
+        this.evaluationService.delete(id, evaluationId, principal);
         return ResponseEntity.noContent().build();
     }
 }

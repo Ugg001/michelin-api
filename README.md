@@ -45,7 +45,9 @@ Keycloak du cours : `https://keycloak.bober.ovh/realms/master`
 - `lucien.bramard@michelin.fr` / `lasecuriteavantout` (USER)
 - `noel.flantier@michelin.fr` / `cestbeaulhiver` (ADMIN)
 
-Le token doit contenir `preferred_username` (ou au moins `sub`), comme ceux du TP dans Bruno. Le client `admin-cli` de Keycloak renvoie un token trop court, sans nom.
+Avec ce profil, ADMIN crée et modifie les restaurants, et peut modifier n'importe quelle évaluation. USER crée une évaluation et ne modifie que les siennes. La lecture des restaurants et la recherche restent ouvertes.
+
+Le token doit contenir `preferred_username` (ou au moins `sub`) et le rôle (`realm_access.roles`), comme ceux des TP dans Bruno. Le client `admin-cli` de Keycloak renvoie un token trop court, sans nom ni rôle.
 
 ```powershell
 curl.exe -H "Content-Type: application/json" -d "{\"nomEvaluateur\":\"Lucien\",\"commentaire\":\"Excellent saumon\",\"note\":3}" http://localhost:8082/restaurant/1/evaluation

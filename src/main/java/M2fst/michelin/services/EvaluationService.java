@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,10 +51,12 @@ public class EvaluationService {
     }
 
     @Transactional
-    public EvaluationDto update(int restaurantId, int evaluationId, String commentaire, Integer note) {
+    public EvaluationDto update(int restaurantId, int evaluationId, String commentaire, Integer note,
+                                Authentication authentication) {
         this.checkComment(commentaire);
         this.checkNote(note);
         EvaluationEntity entity = this.findEvaluation(restaurantId, evaluationId);
+        this.checkCanEdit(entity, authentication);
         entity.setCommentaire(commentaire);
         entity.setNote(note);
         EvaluationEntity saved = this.evaluationRepository.save(entity);
@@ -88,8 +91,9 @@ public class EvaluationService {
     }
 
     @Transactional
-    public void delete(int restaurantId, int evaluationId) {
+    public void delete(int restaurantId, int evaluationId, Authentication authentication) {
         EvaluationEntity entity = this.findEvaluation(restaurantId, evaluationId);
+        this.checkCanEdit(entity, authentication);
         this.evaluationRepository.delete(entity);
         this.evaluationIndexRepository.delete(entity.getId());
     }
@@ -133,6 +137,33 @@ public class EvaluationService {
             return nom;
         }
         return nomEvaluateur;
+    }
+
+    // Sans JWT on ne vérifie pas le propriétaire, pour garder curl et les tests.
+    // Un ADMIN peut tout modifier. Sinon le sub doit être celui de la création.
+    private void checkCanEdit(EvaluationEntity entity, Authentication authentication) {
+        if (!this.jwtEnabled) {
+            return;
+        }
+        if (!(authentication instanceof JwtAuthenticationToken)) {
+            throw new AccessDeniedException("Il faut être connecté");
+        }
+        if (this.isAdmin(authentication)) {
+            return;
+        }
+        String subject = AuthenticatedUser.subject(authentication);
+        if (subject == null || subject.isBlank() || !subject.equals(entity.getUserSubject())) {
+            throw new AccessDeniedException("Vous ne pouvez modifier que vos évaluations");
+        }
+    }
+
+    private boolean isAdmin(Authentication authentication) {
+        for (GrantedAuthority authority : authentication.getAuthorities()) {
+            if ("ROLE_ADMIN".equals(authority.getAuthority())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String resolveSubject(Authentication authentication, String nomEvaluateur) {

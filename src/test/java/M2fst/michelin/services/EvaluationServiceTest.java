@@ -11,6 +11,7 @@ import M2fst.michelin.search.EvaluationIndexRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -98,7 +99,7 @@ class EvaluationServiceTest {
     @Test
     void should_reject_a_note_below_0_without_calling_the_database() {
         assertThrows(InvalidEvaluationException.class,
-                () -> this.evaluationService.update(1, 4, "Correct", -1));
+                () -> this.evaluationService.update(1, 4, "Correct", -1, null));
         verifyNoInteractions(this.evaluationRepository);
         verifyNoInteractions(this.restaurantRepository);
     }
@@ -119,7 +120,7 @@ class EvaluationServiceTest {
         EvaluationEntity evaluation = this.existingEvaluation();
         this.stubSave();
 
-        EvaluationDto result = this.evaluationService.update(1, 4, "Un peu juste", 1);
+        EvaluationDto result = this.evaluationService.update(1, 4, "Un peu juste", 1, null);
 
         assertEquals("Lucien", result.getNomEvaluateur());
         assertEquals("Un peu juste", result.getCommentaire());
@@ -133,7 +134,7 @@ class EvaluationServiceTest {
         this.existingEvaluation();
         this.stubSave();
 
-        this.evaluationService.update(1, 4, "Un peu juste", 1);
+        this.evaluationService.update(1, 4, "Un peu juste", 1, null);
 
         verify(this.evaluationRepository, times(1)).findById(4);
         verify(this.evaluationRepository, times(1)).save(any(EvaluationEntity.class));
@@ -145,7 +146,7 @@ class EvaluationServiceTest {
         when(this.evaluationRepository.findById(4)).thenReturn(Optional.empty());
 
         assertThrows(NotFoundException.class,
-                () -> this.evaluationService.delete(1, 4));
+                () -> this.evaluationService.delete(1, 4, null));
 
         verify(this.evaluationRepository, times(1)).findById(4);
         verify(this.evaluationRepository, never()).delete(any());
@@ -156,7 +157,7 @@ class EvaluationServiceTest {
         EvaluationEntity evaluation = this.evaluationOnRestaurant(2);
         when(this.evaluationRepository.findById(4)).thenReturn(Optional.of(evaluation));
 
-        assertThrows(NotFoundException.class, () -> this.evaluationService.delete(1, 4));
+        assertThrows(NotFoundException.class, () -> this.evaluationService.delete(1, 4, null));
 
         verify(this.evaluationRepository, never()).delete(any());
     }
@@ -241,9 +242,55 @@ class EvaluationServiceTest {
     void should_delete_an_evaluation() {
         EvaluationEntity evaluation = this.existingEvaluation();
 
-        this.evaluationService.delete(1, 4);
+        this.evaluationService.delete(1, 4, null);
 
         verify(this.evaluationRepository, times(1)).delete(evaluation);
+    }
+
+    @Test
+    void should_refuse_to_update_someone_elses_evaluation() {
+        ReflectionTestUtils.setField(this.evaluationService, "jwtEnabled", true);
+        EvaluationEntity evaluation = this.existingEvaluation();
+        evaluation.setUserSubject("user-lucien");
+
+        assertThrows(AccessDeniedException.class,
+                () -> this.evaluationService.update(1, 4, "Non", 1, this.token("user-noel", "ROLE_USER")));
+        verify(this.evaluationRepository, never()).save(any());
+    }
+
+    @Test
+    void should_let_an_admin_update_any_evaluation() {
+        ReflectionTestUtils.setField(this.evaluationService, "jwtEnabled", true);
+        EvaluationEntity evaluation = this.existingEvaluation();
+        evaluation.setUserSubject("user-lucien");
+        this.stubSave();
+
+        EvaluationDto result = this.evaluationService.update(1, 4, "Corrigé", 2, this.token("user-noel", "ROLE_ADMIN"));
+
+        assertEquals("Corrigé", result.getCommentaire());
+        verify(this.evaluationRepository, times(1)).save(any(EvaluationEntity.class));
+    }
+
+    @Test
+    void should_let_the_owner_update_his_evaluation() {
+        ReflectionTestUtils.setField(this.evaluationService, "jwtEnabled", true);
+        EvaluationEntity evaluation = this.existingEvaluation();
+        evaluation.setUserSubject("user-lucien");
+        this.stubSave();
+
+        EvaluationDto result = this.evaluationService.update(1, 4, "Le mien", 2, this.token("user-lucien", "ROLE_USER"));
+
+        assertEquals("Le mien", result.getCommentaire());
+    }
+
+    private JwtAuthenticationToken token(String subject, String role) {
+        Jwt jwt = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .subject(subject)
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build();
+        return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority(role)));
     }
 
     private EvaluationEntity existingEvaluation() {
