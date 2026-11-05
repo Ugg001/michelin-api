@@ -1,6 +1,7 @@
 package M2fst.michelin.services;
 
 import M2fst.michelin.dto.RestaurantDto;
+import M2fst.michelin.entity.EvaluationEntity;
 import M2fst.michelin.entity.RestaurantEntity;
 import M2fst.michelin.exceptions.InvalidRestaurantException;
 import M2fst.michelin.exceptions.NotFoundException;
@@ -122,6 +123,37 @@ class RestaurantServiceTest {
     }
 
     @Test
+    void should_compute_moyenne_when_the_restaurant_has_evaluations() {
+        RestaurantEntity restaurant = new RestaurantEntity();
+        restaurant.setId(1);
+        restaurant.setNom("Le Cinq");
+        restaurant.setAdresse("Paris");
+        restaurant.getEvaluations().add(this.evaluation("Lucien", "Tres bon", 3));
+        restaurant.getEvaluations().add(this.evaluation("Ada", "Correct", 1));
+        when(this.restaurantRepository.findById(1)).thenReturn(Optional.of(restaurant));
+
+        RestaurantDto result = this.restaurantService.findById(1);
+
+        assertEquals(2.0, result.getMoyenne(), 0.001);
+        assertEquals(2, result.getEvaluations().size());
+        assertEquals(3, result.getEvaluations().get(0).getNote());
+    }
+
+    @Test
+    void should_keep_moyenne_zero_when_the_only_note_is_zero() {
+        RestaurantEntity restaurant = new RestaurantEntity();
+        restaurant.setId(1);
+        restaurant.setNom("Le Cinq");
+        restaurant.setAdresse("Paris");
+        restaurant.getEvaluations().add(this.evaluation("Lucien", "Decevant", 0));
+        when(this.restaurantRepository.findById(1)).thenReturn(Optional.of(restaurant));
+
+        RestaurantDto result = this.restaurantService.findById(1);
+
+        assertEquals(0.0, result.getMoyenne(), 0.001);
+    }
+
+    @Test
     void should_return_moyenne_minus_one_when_listing() {
         RestaurantEntity restaurant = new RestaurantEntity();
         restaurant.setId(1);
@@ -134,6 +166,14 @@ class RestaurantServiceTest {
         assertEquals(1, result.size());
         assertEquals(-1.0, result.get(0).getMoyenne(), 0.001);
         assertTrue(result.get(0).getEvaluations().isEmpty());
+    }
+
+    private EvaluationEntity evaluation(String nom, String commentaire, int note) {
+        EvaluationEntity evaluation = new EvaluationEntity();
+        evaluation.setNomEvaluateur(nom);
+        evaluation.setCommentaire(commentaire);
+        evaluation.setNote(note);
+        return evaluation;
     }
 
     private RestaurantEntity existingRestaurant() {

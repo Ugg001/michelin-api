@@ -13,5 +13,5 @@ public class RestaurantDto {
     private String nom;
     private String adresse;
     private double moyenne;
-    private List<Object> evaluations;
+    private List<EvaluationDto> evaluations;
 }

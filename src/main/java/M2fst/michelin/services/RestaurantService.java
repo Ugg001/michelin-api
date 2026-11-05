@@ -1,6 +1,8 @@
 package M2fst.michelin.services;
 
+import M2fst.michelin.dto.EvaluationDto;
 import M2fst.michelin.dto.RestaurantDto;
+import M2fst.michelin.entity.EvaluationEntity;
 import M2fst.michelin.entity.RestaurantEntity;
 import M2fst.michelin.exceptions.InvalidRestaurantException;
 import M2fst.michelin.exceptions.NotFoundException;
@@ -9,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -67,13 +70,41 @@ public class RestaurantService {
     }
 
     private static RestaurantDto toDto(RestaurantEntity entity) {
+        List<EvaluationEntity> evaluations = entity.getEvaluations();
         return RestaurantDto.builder()
                 .id(entity.getId())
                 .nom(entity.getNom())
                 .adresse(entity.getAdresse())
-                // Pas encore d'évaluation donc on met -1.
-                .moyenne(-1)
-                .evaluations(List.of())
+                .moyenne(moyenne(evaluations))
+                .evaluations(toEvaluationDtos(evaluations))
                 .build();
+    }
+
+    // S'il n'y a aucune évaluation, la moyenne vaut -1.
+    private static double moyenne(List<EvaluationEntity> evaluations) {
+        if (evaluations == null || evaluations.isEmpty()) {
+            return -1;
+        }
+        int total = 0;
+        for (EvaluationEntity evaluation : evaluations) {
+            total = total + evaluation.getNote();
+        }
+        return (double) total / evaluations.size();
+    }
+
+    private static List<EvaluationDto> toEvaluationDtos(List<EvaluationEntity> evaluations) {
+        List<EvaluationDto> result = new ArrayList<>();
+        if (evaluations == null) {
+            return result;
+        }
+        for (EvaluationEntity evaluation : evaluations) {
+            result.add(EvaluationDto.builder()
+                    .id(evaluation.getId())
+                    .nomEvaluateur(evaluation.getNomEvaluateur())
+                    .commentaire(evaluation.getCommentaire())
+                    .note(evaluation.getNote())
+                    .build());
+        }
+        return result;
     }
 }

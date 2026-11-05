@@ -1,6 +1,7 @@
 package M2fst.michelin.controllers;
 
 import M2fst.michelin.dto.ErrorResponse;
+import M2fst.michelin.exceptions.InvalidEvaluationException;
 import M2fst.michelin.exceptions.InvalidRestaurantException;
 import M2fst.michelin.exceptions.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,12 @@ import java.util.stream.Collectors;
 @Slf4j
 @ControllerAdvice
 public class CustomExceptionHandler extends ResponseEntityExceptionHandler {
+
+    @ExceptionHandler(InvalidEvaluationException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidEvaluation(InvalidEvaluationException ex) {
+        log.warn("Invalid evaluation: {}", ex.getMessage());
+        return ResponseEntity.badRequest().body(new ErrorResponse(400, ex.getMessage()));
+    }
 
     @ExceptionHandler(InvalidRestaurantException.class)
     public ResponseEntity<ErrorResponse> handleInvalidRestaurant(InvalidRestaurantException ex) {
